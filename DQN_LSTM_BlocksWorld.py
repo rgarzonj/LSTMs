@@ -600,9 +600,9 @@ with tf.Session() as sess:
 
 
 ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_window=5,noshow=True)
-ep_length.savefig(experiment_dir + '/ep_length.jpg')
-ep_reward.savefig(experiment_dir + '/ep_reward.jpg')
-t_steps.savefig(experiment_dir + '/t_steps.jpg')
+ep_length.savefig(experiment_dir + '/ep_length.png')
+ep_reward.savefig(experiment_dir + '/ep_reward.png')
+t_steps.savefig(experiment_dir + '/t_steps.png')
     
 
 # In[ ]:
