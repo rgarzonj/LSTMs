@@ -12,10 +12,11 @@ print (gym.__file__)
 ```
 - Copy the file blocksworld.py to the folder gym/envs/classic_control
 - Edit the file gym/envs/classic_control/__init__.py and add the following line:
-```from gym.envs.classic_control.blocksworld import BlocksWorldEnv```
+```from gym.envs.classic_control.blocksworld import BlocksWorldEnv
+```
 
-- Download the file GENERATOR and compile it
-- Edit the file blocksworld.py and configure the path to the binary file bwstates 
+- Go to the folder Blocksworld/GENERATOR/bwstates.1 and compile the binary bwsates. Alternatively download the file bwstates.1.tar.gz and compile for your platform.
+- Edit the file blocksworld.py and configure the path to the binary file 'bwstates' 
 
 
 ##

@@ -56,7 +56,8 @@ class BlocksWorldEnv(gym.Env):
     
     def generate_random_state (self):
     #""" Generates valid initial state from the implementation of Slaney & Thiébaux""" 
-        bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        #bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
         bwstates_command = bwstates_path + ' -n ' + str(self.numBlocks) 
         #+ ' -r ' + str(seed)
         proc = subprocess.Popen(bwstates_command,stdout=subprocess.PIPE,shell=True)
