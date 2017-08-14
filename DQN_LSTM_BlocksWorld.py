@@ -16,6 +16,7 @@ import psutil
 import tensorflow as tf
 import shutil
 import datetime
+import pickle
 
 basename = "BlocksWorld"
 suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
@@ -34,9 +35,9 @@ from collections import namedtuple
 
 
 numBlocks = 2
-n_steps = 128
+n_steps = 64
 n_input = numBlocks*2
-n_hidden = 64
+n_hidden = 512
 n_output = numBlocks*(numBlocks+1)
 
 # In[ ]:
@@ -318,7 +319,7 @@ def make_epsilon_greedy_policy(estimator, nA):
 #        q_values = estimator.predict(sess, np.expand_dims(observation, 0))[0]
         q_values = estimator.predict(sess, observation)[0]
         print ("\nQ_values")
-        print (q_values)       
+        #print (q_values)       
         best_action = np.argmax(q_values)
         A[best_action] += (1.0 - epsilon)
         print (A)
@@ -381,6 +382,15 @@ def deep_q_learning(sess,
     print ('numBlocks = ' + str(numBlocks))
     print ('n_steps = ' + str(n_steps))
     print ('n_hidden = ' + str(n_hidden))
+#    dict = {'replay_memory_size': str(replay_memory_size)}
+    dict = {'replay_memory_size': replay_memory_size, 'replay_memory_init_size': replay_memory_init_size,
+        'update_target_estimator_every':update_target_estimator_every,'epsilon_decay_steps':epsilon_decay_steps,
+        'batch_size':batch_size,'numBlocks':numBlocks,n_steps:'n_steps',
+        'n_hidden':n_hidden}
+    file = open(experiment_dir + '/dump.txt', 'wb')
+    pickle.dump(dict, file)
+    file.close()
+
 
     #Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done","prev_states"])
@@ -582,11 +592,11 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=5,
+                                    num_episodes=1000,
 #                                    replay_memory_size=500000,
-                                    replay_memory_size=5000,
+                                    replay_memory_size=500000,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=500,
+                                    replay_memory_init_size=50000,
 #                                    update_target_estimator_every=10000,
                                     update_target_estimator_every=100,
                                     epsilon_start=1.0,
@@ -603,6 +613,9 @@ ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_wind
 ep_length.savefig(experiment_dir + '/ep_length.png')
 ep_reward.savefig(experiment_dir + '/ep_reward.png')
 t_steps.savefig(experiment_dir + '/t_steps.png')
+
+
+
     
 
 # In[ ]:
