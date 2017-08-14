@@ -28,7 +28,7 @@ from collections import namedtuple
 
 
 
-numBlocks = 2
+numBlocks = 3
 n_steps = 512
 n_input = numBlocks*2
 n_hidden = 128
@@ -274,7 +274,7 @@ def computePreviousStates(replay_memory,seq_length):
         n = seq_length    
     else:    
         n = len(replay_memory)    
-    while (n > 0):
+    while (n > 0 and (replay_memory[-n].done == False)):
 #        if (computeNextStates == True):
         prev_states_next.append(replay_memory[-n].next_state)
 #        else:
@@ -310,10 +310,11 @@ def make_epsilon_greedy_policy(estimator, nA):
         #prev_states = computePreviousStates(replay_memory,n_steps,False)
 #        q_values = estimator.predict(sess, np.expand_dims(observation, 0))[0]
         q_values = estimator.predict(sess, observation)[0]
-        #print (q_values)
+        print ("\nQ_values")
+        print (q_values)       
         best_action = np.argmax(q_values)
         A[best_action] += (1.0 - epsilon)
-        #print (A)
+        print (A)
         return A
     return policy_fn
 
@@ -365,6 +366,11 @@ def deep_q_learning(sess,
     Returns:
         An EpisodeStats object with two numpy arrays for episode_lengths and episode_rewards.
     """
+    print ('replay_memory_size = ' + str(replay_memory_size))
+    print ('replay_memory_init_size = ' + str(replay_memory_init_size))
+    print ('update_target_estimator_every = ' + str(update_target_estimator_every))
+    print ('epsilon_decay_steps = ' + str(epsilon_decay_steps))
+    print ('batch_size = ' + str(batch_size))  
 
     #Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done","prev_states"])
@@ -449,7 +455,7 @@ def deep_q_learning(sess,
         state = state_processor.process(sess, state)
         #state = np.stack([state] * 4, axis=2)
         loss = None
-
+        print ('\n******** NEW EPISODE ***********************************\n')
         # One step in the environment
         for t in itertools.count():
 
@@ -472,8 +478,9 @@ def deep_q_learning(sess,
             #action_probs = policy(sess, state, epsilon)
             action_probs = policy(sess, prev_states_current, epsilon)
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+            #print ("\nTaking action " + str(VALID_ACTIONS[action]))
             next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
-            env.render()
+            #env.render()
             next_state = state_processor.process(sess, next_state)
 #            next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
 
@@ -510,6 +517,7 @@ def deep_q_learning(sess,
 
             if done:
                 print ('PROBLEM SOLVED')
+                print ('\n*******************************************\n')
                 break
             #if (loss>500):
             #    break
@@ -561,22 +569,29 @@ with tf.Session() as sess:
                                     target_estimator=target_estimator,
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
-                                    num_episodes=10000,
+#                                    num_episodes=10000,
+                                    num_episodes=100,
 #                                    replay_memory_size=500000,
-                                    replay_memory_size=5000,
+                                    replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=500,
+                                    replay_memory_init_size=5000,
 #                                    update_target_estimator_every=10000,
                                     update_target_estimator_every=100,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=50,
+                                    epsilon_decay_steps=5000,
                                     discount_factor=0.99,
+#                                    batch_size=32):
                                     batch_size=32):
-
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
 
+
+ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_window=5,noshow=True)
+ep_length.savefig('ep_length.jpg')
+ep_reward.savefig('ep_reward.jpg')
+t_steps.savefig('t_steps.jpg')
+    
 
 # In[ ]:
 

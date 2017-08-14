@@ -12,7 +12,7 @@ import random
 import gym
 
 
-numBlocks = 5
+numBlocks = 3
 env = gym.make('BlocksWorld-v0')
 
 env.seed(0)
