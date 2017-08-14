@@ -10,7 +10,15 @@ Follow these steps in order to configure the environment:
 import gym
 print (gym.__file__)
 ```
-- Copy the file blocksworld.py to the folder gym/envs/classic_control
+- Copy the file /Blocksworld/classic_control/blocksworld.py to the folder gym/envs/classic_control
+- Edit the file gym/envs/__init__.py and add the lines
+```python
+register(
+    id='BlocksWorld-v0',
+    entry_point='gym.envs.classic_control:BlocksWorldEnv',
+    max_episode_steps=20000,
+)
+```
 - Edit the file gym/envs/classic_control/__init__.py and add the following line:
 ```python
 from gym.envs.classic_control.blocksworld import BlocksWorldEnv

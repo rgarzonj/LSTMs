@@ -14,7 +14,12 @@ import random
 import sys
 import psutil
 import tensorflow as tf
+import shutil
+import datetime
 
+basename = "BlocksWorld"
+suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
+filename = "_".join([basename, suffix]) # e.g. 'mylogfile_120508_171442'
 
 if "../reinforcement-learning/lib" not in sys.path:
   sys.path.append("../reinforcement-learning/lib")
@@ -28,10 +33,10 @@ from collections import namedtuple
 
 
 
-numBlocks = 3
-n_steps = 512
+numBlocks = 2
+n_steps = 128
 n_input = numBlocks*2
-n_hidden = 128
+n_hidden = 64
 n_output = numBlocks*(numBlocks+1)
 
 # In[ ]:
@@ -40,6 +45,8 @@ n_output = numBlocks*(numBlocks+1)
 #VALID_ACTIONS = [0, 1, 2, 3]
 VALID_ACTIONS = np.array(range(n_output))
 
+
+#shutil.rmtree('./experiments/' + filename)
 
 env = gym.envs.make("BlocksWorld-v0")
 
@@ -370,7 +377,10 @@ def deep_q_learning(sess,
     print ('replay_memory_init_size = ' + str(replay_memory_init_size))
     print ('update_target_estimator_every = ' + str(update_target_estimator_every))
     print ('epsilon_decay_steps = ' + str(epsilon_decay_steps))
-    print ('batch_size = ' + str(batch_size))  
+    print ('batch_size = ' + str(batch_size))
+    print ('numBlocks = ' + str(numBlocks))
+    print ('n_steps = ' + str(n_steps))
+    print ('n_hidden = ' + str(n_hidden))
 
     #Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done","prev_states"])
@@ -547,7 +557,9 @@ def deep_q_learning(sess,
 tf.reset_default_graph()
 
 # Where we save our checkpoints and graphs
-experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
+#experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
+experiment_dir = os.path.abspath("./experiments/{}".format(filename))
+
 
 # Create a glboal step variable
 global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -570,11 +582,11 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=100,
+                                    num_episodes=5,
 #                                    replay_memory_size=500000,
-                                    replay_memory_size=50000,
+                                    replay_memory_size=5000,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=5000,
+                                    replay_memory_init_size=500,
 #                                    update_target_estimator_every=10000,
                                     update_target_estimator_every=100,
                                     epsilon_start=1.0,
@@ -588,9 +600,9 @@ with tf.Session() as sess:
 
 
 ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_window=5,noshow=True)
-ep_length.savefig('ep_length.jpg')
-ep_reward.savefig('ep_reward.jpg')
-t_steps.savefig('t_steps.jpg')
+ep_length.savefig(experiment_dir + '/ep_length.jpg')
+ep_reward.savefig(experiment_dir + '/ep_reward.jpg')
+t_steps.savefig(experiment_dir + '/t_steps.jpg')
     
 
 # In[ ]:
