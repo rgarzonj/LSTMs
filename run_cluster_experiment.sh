@@ -2,3 +2,4 @@
 #!/bin/sh
 source activate tensorflow_cpu
 python DQN_LSTM_BlocksWorld.py
+source deactivate tensorflow_cpu
