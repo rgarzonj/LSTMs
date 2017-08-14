@@ -1,8 +1,6 @@
 # LSTMs
 This repository includes the tests with the Blocksworld environment and LSTMs
 
-Tests with LSTMs
-
 ## Blocksworld environment on OpenAI Gym
 I implemented the interface for OpenAI Gym environments for the BlocksWorld environment based on the work of [Slaney and Thiébaux] (https://users.cecs.anu.edu.au/~jks/bw.html)
 
