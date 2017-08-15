@@ -6,7 +6,6 @@
 #get_ipython().magic('matplotlib inline')
 
 import gym
-from gym.wrappers import Monitor
 import itertools
 import numpy as np
 import os
@@ -14,42 +13,53 @@ import random
 import sys
 import psutil
 import tensorflow as tf
-import shutil
 import datetime
 import pickle
+from shutil import copyfile
 
+from collections import namedtuple
+
+# Build the name of the folder where we'll store the results
 basename = "BlocksWorld"
 suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-filename = "_".join([basename, suffix]) # e.g. 'mylogfile_120508_171442'
+filename = "_".join([basename, suffix]) # e.g. 'BlocksWorld_120508_171442'
 
+# Write the path to the repository from dennybritz, we'll use some helper functions
 if "../reinforcement-learning/lib" not in sys.path:
   sys.path.append("../reinforcement-learning/lib")
 
-sys.path.append("/Users/rubengarzon/Documents/Projects/phD/Repo/gym")
+# Plotting is a helper module from dennybritz in the previous repository
 import plotting
-from collections import namedtuple
+
+#sys.path.append("/Users/rubengarzon/Documents/Projects/phD/Repo/gym")
+
 
 
 # In[ ]:
 
+#Define the parameters of the problem and the LSTM
+#Number of blocks in the blocksworld environment
+numBlocks = 3
 
+#Number of steps to feed the LSTM
+n_steps = 32
 
-numBlocks = 2
-n_steps = 64
+#Defines the dimension of the input of the LSTM, we use current state and the goal state as the input
+#For example [0,1] [2,0] (initial state,goal state) has dimension 2*2
 n_input = numBlocks*2
+
+#Number of hidden units in the lstm
 n_hidden = 512
+
+#Dimension of the output [block to be moved][destination of the block]
+#block to be moved has numBlocks length, and destination of the block has 
+#numBlocks+1 because the block can also be moved to the table
 n_output = numBlocks*(numBlocks+1)
 
 # In[ ]:
-
-# Atari Actions: 0 (noop), 1 (fire), 2 (left) and 3 (right) are valid actions
-#VALID_ACTIONS = [0, 1, 2, 3]
+#How many possible actions we have in the environment encoded
+#as an integer
 VALID_ACTIONS = np.array(range(n_output))
-
-
-#shutil.rmtree('./experiments/' + filename)
-
-env = gym.envs.make("BlocksWorld-v0")
 
 
 # In[ ]:
@@ -134,7 +144,7 @@ class Estimator():
 
         # Get lstm cell output
         outputs, states = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
-
+        
         val = tf.transpose(outputs, [1, 0, 2])
         last = tf.gather(val, int(val.get_shape()[0]) - 1)
 
@@ -282,8 +292,9 @@ def computePreviousStates(replay_memory,seq_length):
         n = seq_length    
     else:    
         n = len(replay_memory)    
-    while (n > 0 and (replay_memory[-n].done == False)):
-#        if (computeNextStates == True):
+#    while (n > 0 and (replay_memory[-n].done == False)):
+    while (n > 0):
+    #        if (computeNextStates == True):
         prev_states_next.append(replay_memory[-n].next_state)
 #        else:
         prev_states_current.append(replay_memory[-n].state)
@@ -388,7 +399,7 @@ def deep_q_learning(sess,
         'batch_size':batch_size,'numBlocks':numBlocks,n_steps:'n_steps',
         'n_hidden':n_hidden}
     file = open(experiment_dir + '/dump.txt', 'wb')
-    pickle.dump(dict, file)
+    pickle.dump(str.encode(str(dict)), file)
     file.close()
 
 
@@ -472,6 +483,7 @@ def deep_q_learning(sess,
 
         # Reset the environment
         state = env.reset()
+        env.render()
         state = state_processor.process(sess, state)
         #state = np.stack([state] * 4, axis=2)
         loss = None
@@ -498,9 +510,9 @@ def deep_q_learning(sess,
             #action_probs = policy(sess, state, epsilon)
             action_probs = policy(sess, prev_states_current, epsilon)
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
-            #print ("\nTaking action " + str(VALID_ACTIONS[action]))
+            print ("\nTaking action " + str(VALID_ACTIONS[action]))
             next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
-            #env.render()
+            env.render()
             next_state = state_processor.process(sess, next_state)
 #            next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
 
@@ -564,6 +576,8 @@ def deep_q_learning(sess,
 
 # In[ ]:
 
+env = gym.envs.make("BlocksWorld-v0")
+    
 tf.reset_default_graph()
 
 # Where we save our checkpoints and graphs
@@ -592,20 +606,20 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=1000,
+                                    num_episodes=100,
 #                                    replay_memory_size=500000,
-                                    replay_memory_size=500000,
+                                    replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=50000,
+                                    replay_memory_init_size=10000,
 #                                    update_target_estimator_every=10000,
                                     update_target_estimator_every=100,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=5000,
+                                    epsilon_decay_steps=1000,
                                     discount_factor=0.99,
 #                                    batch_size=32):
-                                    batch_size=32):
+                                    batch_size=256):
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
 
 
@@ -615,7 +629,8 @@ ep_reward.savefig(experiment_dir + '/ep_reward.png')
 t_steps.savefig(experiment_dir + '/t_steps.png')
 
 
-
+copyfile("./log.txt", experiment_dir + "/log.txt")
+os.remove("./log.txt")
     
 
 # In[ ]:

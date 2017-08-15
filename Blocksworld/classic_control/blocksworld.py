@@ -1,6 +1,5 @@
 import gym
 from gym.spaces import Discrete, Tuple
-from gym import spaces
 from gym.utils import seeding
 from six import StringIO
 import sys
@@ -17,24 +16,28 @@ import copy
 #{0,BlocksNum}
 
 
+# IMPORTANT: 
+# Before using configure the __init__ function, 
+# Configure the variables 'numBlocks' and 'self.bwstates_path'
+
 
 class BlocksWorldEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}
     
-    def __init__(self,numBlocks=3):
+    def __init__(self):
+        numBlocks = 3
+        #self.bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+
         self.numBlocks = numBlocks
-        #Block to move, Destination to be moved
+        #The tuple consists on: Block to move, Destination to be moved
         self.action_space = Tuple(
             [Discrete(numBlocks-1), Discrete(numBlocks)])
-        #self.action_space = spaces.Discrete(2)
-        #self.observation_space = spaces.Discrete(numBlocks)
+
         self.observation_space = Tuple(
             [Discrete(numBlocks), Discrete(numBlocks),Discrete(numBlocks)])
         self.episode_total_reward = None
         self.numactions = (numBlocks+1)*numBlocks
-#        high = np.array([1., 1., self.max_speed])
-#        self.action_space = spaces.Box(low=-self.max_torque, high=self.max_torque, shape=(1,))
-#        self.observation_space = spaces.Box(low=-high, high=high)
 
         self._seed()
     
@@ -56,9 +59,7 @@ class BlocksWorldEnv(gym.Env):
     
     def generate_random_state (self):
     #""" Generates valid initial state from the implementation of Slaney & Thiébaux""" 
-        #bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
-        bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
-        bwstates_command = bwstates_path + ' -n ' + str(self.numBlocks) 
+        bwstates_command = self.bwstates_path + ' -n ' + str(self.numBlocks) 
         #+ ' -r ' + str(seed)
         proc = subprocess.Popen(bwstates_command,stdout=subprocess.PIPE,shell=True)
         (out, err) = proc.communicate()
@@ -70,7 +71,6 @@ class BlocksWorldEnv(gym.Env):
         return res
     
     def generate_random_goal(self,initialState):
-        nBlocks = self.numBlocks
         goalState = self.generate_random_state()
         while (str(initialState)==str(goalState)):
             goalState = self.generate_random_state()
