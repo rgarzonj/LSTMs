@@ -457,8 +457,14 @@ def deep_q_learning(sess,
     for i in range(replay_memory_init_size):
         #action_probs = policy(sess, state, epsilons[min(total_t, epsilon_decay_steps-1)])
         #action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+        prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
+        action_probs = policy(sess, prev_states_current, epsilons[min(total_t, epsilon_decay_steps-1)])
+        action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+        print ("\nTaking action " + str(VALID_ACTIONS[action]))
+                
         #TODO: Follow the policy when choosing an action
-        action = np.random.choice(VALID_ACTIONS)
+        #Old version without following the policy
+        #action = np.random.choice(VALID_ACTIONS)
         next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
         next_state = state_processor.process(sess, next_state)
         #next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
@@ -582,7 +588,11 @@ tf.reset_default_graph()
 
 # Where we save our checkpoints and graphs
 #experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
-experiment_dir = os.path.abspath("./experiments/{}".format(filename))
+# Check if one parameter was used as command line argument
+if (len(sys.argv)>1):
+    experiment_dir = sys.argv[1]
+else:
+    experiment_dir = os.path.abspath("./experiments/{}".format(filename))
 
 
 # Create a glboal step variable
