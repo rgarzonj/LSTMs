@@ -50,7 +50,7 @@ n_steps = 32
 n_input = numBlocks*2
 
 #Number of hidden units in the lstm
-n_hidden = 512
+n_hidden = 1024
 
 #Dimension of the output [block to be moved][destination of the block]
 #block to be moved has numBlocks length, and destination of the block has 
@@ -710,11 +710,11 @@ with tf.Session() as sess:
 #                                    replay_memory_init_size=50000,
                                     replay_memory_init_size=10000,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=200,
+                                    update_target_estimator_every=100,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=500,
+                                    epsilon_decay_steps=300,
                                     discount_factor=0.99,
 #                                    batch_size=32):
                                     batch_size=512):
