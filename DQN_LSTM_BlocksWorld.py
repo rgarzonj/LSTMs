@@ -16,6 +16,7 @@ import tensorflow as tf
 import datetime
 import pickle
 from shutil import copyfile
+import h5py
 
 from collections import namedtuple
 
@@ -39,7 +40,7 @@ import plotting
 
 #Define the parameters of the problem and the LSTM
 #Number of blocks in the blocksworld environment
-numBlocks = 3
+numBlocks = 2
 
 #Number of steps to feed the LSTM
 n_steps = 32
@@ -60,6 +61,10 @@ n_output = numBlocks*(numBlocks+1)
 #How many possible actions we have in the environment encoded
 #as an integer
 VALID_ACTIONS = np.array(range(n_output))
+
+
+# LSTM Visualization
+#all_states = []
 
 
 # In[ ]:
@@ -95,7 +100,6 @@ class Estimator():
     This network is used for both the Q-Network and the Target Network.
     """
 
-
     # RNN output node weights and biases
 
     def __init__(self, scope="estimator", summaries_dir=None):
@@ -110,6 +114,8 @@ class Estimator():
                 if not os.path.exists(summary_dir):
                     os.makedirs(summary_dir)
                 self.summary_writer = tf.summary.FileWriter(summary_dir)
+        self.all_steps = []
+        self.all_states = []        
 
     def add_sessionGraph(self,sess):
         self.summary_writer.add_graph(sess.graph)
@@ -145,6 +151,9 @@ class Estimator():
         # Get lstm cell output
         outputs, states = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
         
+        self.states = states[0]
+        self.current_st = tf.reshape(tf.slice(self.X_pl,[0,n_steps-1,0],[1,1,n_input]),[-1,n_input])
+
         val = tf.transpose(outputs, [1, 0, 2])
         last = tf.gather(val, int(val.get_shape()[0]) - 1)
 
@@ -161,7 +170,8 @@ class Estimator():
         self.loss = tf.reduce_mean(self.losses)
 
         # Optimizer Parameters from original paper
-        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+#        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+        self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 
         # Summaries for Tensorboard
@@ -185,7 +195,19 @@ class Estimator():
           Tensor of shape [batch_size, NUM_VALID_ACTIONS] containing the estimated 
           action values.
         """
-        return sess.run(self.predictions, { self.X_pl: s })
+        #print (self.predictions)
+#        return sess.run(self.predictions, { self.X_pl: s })
+        pred,stat,curr_state = sess.run([self.predictions, self.states,self.current_st], { self.X_pl: s })
+        if len(self.all_states) == 0:
+            self.all_states = np.array(stat)
+        else:
+            self.all_states = np.vstack((self.all_states, np.array(stat)))
+        #Take the last step in the sequence of steps
+        if (len(self.all_steps) == 0):
+            self.all_steps = np.array(curr_state)
+        else:
+            self.all_steps = np.vstack((self.all_steps, np.array(curr_state)))
+        return (pred)
 
     def update(self, sess, s, a, y):
         """
@@ -209,6 +231,73 @@ class Estimator():
             self.summary_writer.add_summary(summaries, global_step)
         return loss
 
+    def state_array_to_integer_array (self,state_array):
+        #This implementation only works for less than 10 blocks
+        #print (state_array)
+        #print (type(state_array))
+        state_array_list = []
+        
+        for x in state_array:
+            ret = ""
+            for digit in x:
+                ret += str(int(digit))
+            state_array_list.append(int(ret))
+        return state_array_list
+    
+    def state_to_integer (self,state_array):
+        #This implementation only works for less than 10 blocks
+        ret = ""
+        for x in state_array:
+            ret += str(int(x))
+        return int(ret)
+    
+                                    
+    def state_to_string (self,state_array):
+        #This implementation only works for less than 10 blocks
+        ret = ""
+        for digit in state_array:
+            ret += str(digit)          
+        return ret
+    
+    def cartesian(self,*arrays):
+        mesh = np.meshgrid(*arrays)  # standard numpy meshgrid
+        dim = len(mesh)  # number of dimensions
+        elements = mesh[0].size  # number of elements, any index will do
+        flat = np.concatenate(mesh).ravel()  # flatten the whole meshgrid
+        reshape = np.reshape(flat, (dim, elements)).T  # reshape and transpose
+        return reshape
+    
+    def generate_dictionary_file (self):
+        global numBlocks
+        ret = ""
+        x = np.arange(n_input)
+        if (numBlocks == 2):
+            a = self.cartesian(x, x, x, x)
+        if (numBlocks ==3):
+            a = self.cartesian(x, x, x, x, x, x)
+        for i in a:
+            ret += self.state_to_string(i) + " " + str(self.state_to_integer(i)) + "\n"
+        return ret
+                        
+    def save_states(self,folder):
+        #stat = np.reshape(self.all_states, (-1, self.all_states.shape[2]))
+        os.makedirs(folder)
+        f = h5py.File(folder + "/states.hdf5", "w")
+        print (len(self.all_states))
+        print (self.all_states[0])
+        f["states1"] = self.all_states
+        f.close()
+        #The contents of train.h5 must be a list of the input at the different steps
+        f = h5py.File(folder + "/train.hdf5", "w")
+        train = self.state_array_to_integer_array(self.all_steps)
+        print (train[0])
+        print (len(train))
+        f["word_ids"] = train        
+        f.close()
+        data = self.generate_dictionary_file()
+        out = open(folder + "/train.dict", "w")
+        out.write(data)
+        out.close()
 
 # In[ ]:
 
@@ -455,14 +544,11 @@ def deep_q_learning(sess,
 #    print (state)
 #    state = np.stack([state] * 4, axis=2)    
     for i in range(replay_memory_init_size):
-        #action_probs = policy(sess, state, epsilons[min(total_t, epsilon_decay_steps-1)])
-        #action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+        #New version follows the existing policy, only useful if the estimator has been pre-loaded
         prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
         action_probs = policy(sess, prev_states_current, epsilons[min(total_t, epsilon_decay_steps-1)])
         action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
-        print ("\nTaking action " + str(VALID_ACTIONS[action]))
-                
-        #TODO: Follow the policy when choosing an action
+        #print ("\nTaking action " + str(VALID_ACTIONS[action]))        
         #Old version without following the policy
         #action = np.random.choice(VALID_ACTIONS)
         next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
@@ -586,6 +672,8 @@ env = gym.envs.make("BlocksWorld-v0")
     
 tf.reset_default_graph()
 
+
+
 # Where we save our checkpoints and graphs
 #experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
 # Check if one parameter was used as command line argument
@@ -616,21 +704,23 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=100,
+                                    num_episodes=200,
 #                                    replay_memory_size=500000,
                                     replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
                                     replay_memory_init_size=10000,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=100,
+                                    update_target_estimator_every=200,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=1000,
+                                    epsilon_decay_steps=500,
                                     discount_factor=0.99,
 #                                    batch_size=32):
-                                    batch_size=256):
+                                    batch_size=512):
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
+
+
 
 
 ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_window=5,noshow=True)
@@ -638,6 +728,8 @@ ep_length.savefig(experiment_dir + '/ep_length.png')
 ep_reward.savefig(experiment_dir + '/ep_reward.png')
 t_steps.savefig(experiment_dir + '/t_steps.png')
 
+
+q_estimator.save_states(experiment_dir + "/lstmvis")
 
 copyfile("./log.txt", experiment_dir + "/log.txt")
 os.remove("./log.txt")
