@@ -25,15 +25,15 @@ basename = "BlocksWorld"
 suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
 filename = "_".join([basename, suffix]) # e.g. 'BlocksWorld_120508_171442'
 
+lstm_vis_config = "./lstmvis/lstm.yml"
 # Write the path to the repository from dennybritz, we'll use some helper functions
 if "../reinforcement-learning/lib" not in sys.path:
   sys.path.append("../reinforcement-learning/lib")
 
-# Plotting is a helper module from dennybritz in the previous repository
+# Plotting is a helper module from dennybritz in the repository mentioned above
 import plotting
 
 #sys.path.append("/Users/rubengarzon/Documents/Projects/phD/Repo/gym")
-
 
 
 # In[ ]:
@@ -50,28 +50,24 @@ n_steps = 32
 n_input = numBlocks*2
 
 #Number of hidden units in the lstm
-n_hidden = 1024
+n_hidden = 256
 
-#Dimension of the output [block to be moved][destination of the block]
+#Dimensions of the output: [block to be moved][destination of the block]
 #block to be moved has numBlocks length, and destination of the block has 
-#numBlocks+1 because the block can also be moved to the table
+#numBlocks+1 because the block can be moved either on top of another block(numBlocks) but
+#also on top of the table(+1)
 n_output = numBlocks*(numBlocks+1)
 
 # In[ ]:
-#How many possible actions we have in the environment encoded
-#as an integer
+#How many possible actions we have in the environment. We will encode the actions as an integer.
 VALID_ACTIONS = np.array(range(n_output))
-
-
-# LSTM Visualization
-#all_states = []
 
 
 # In[ ]:
 
 class StateProcessor():
     """
-    Processes a raw Atari iamges. Resizes it and converts it to grayscale.
+    At this time the state processor is not used, but we keep it in case we need it in the future
     """
     def __init__(self):
         # Build the Tensorflow graph
@@ -83,10 +79,10 @@ class StateProcessor():
         """
         Args:
             sess: A Tensorflow session object
-            state: A [210, 160, 3] Atari RGB State
+            state: 
 
         Returns:
-            A processed [84, 84, 1] state representing grayscale values.
+            The same as the input
         """
         return sess.run(self.output, { self.input_state: state })
 
@@ -114,10 +110,16 @@ class Estimator():
                 if not os.path.exists(summary_dir):
                     os.makedirs(summary_dir)
                 self.summary_writer = tf.summary.FileWriter(summary_dir)
+        # The following variables will be used for LSTM Visualization using LSTMVis package
         self.all_steps = []
         self.all_states = []        
-
+        self.all_outputs = []
+        self.all_hid_states = []
+    
     def add_sessionGraph(self,sess):
+        """
+        Visualize the graph using tensorboard
+        """
         self.summary_writer.add_graph(sess.graph)
 
     def _build_model(self):
@@ -125,7 +127,6 @@ class Estimator():
         """
         Builds the Tensorflow graph.
         """
-        #n_hidden = 32
         weights = {
             'out': tf.Variable(tf.random_normal([n_hidden, n_output]))
             }
@@ -133,30 +134,36 @@ class Estimator():
             'out': tf.Variable(tf.random_normal([n_output]))
             }
  
-       # Batch size x time steps x features.
-        # Batch size x Sequence Length (n_input)            
+        # Dimension of X_pl is Batch size x time steps x features(or input dimensions).
         self.X_pl = tf.placeholder(shape=[None,n_steps,n_input],dtype = tf.float32,name = "X")
-        
+        # The TD target value        
         self.y_pl = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
         # Integer id of which action was selected
         self.actions_pl = tf.placeholder(shape=[None], dtype=tf.int32, name="actions")
-                # reshape to [1, n_input]
-        
+             
         batch_size = tf.shape(self.X_pl)[0]
- #       x = tf.unstack(self.X_pl, n_steps, 1)
 
         # Define a lstm cell with tensorflow
         lstm_cell = tf.contrib.rnn.BasicLSTMCell(n_hidden, forget_bias=1.0)
 
         # Get lstm cell output
+        # Creates an unrolled graph
+        # outputs
         outputs, states = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
-        
-        self.states = states[0]
+        print (outputs.shape)
+        print (states[0].shape)
+        print (states[1].shape)
+        self.cell_states = states[0]
+        self.hidden_states = states[1]
+        # We need to store the current state for LSTMVis
+        # 
         self.current_st = tf.reshape(tf.slice(self.X_pl,[0,n_steps-1,0],[1,1,n_input]),[-1,n_input])
 
         val = tf.transpose(outputs, [1, 0, 2])
         last = tf.gather(val, int(val.get_shape()[0]) - 1)
 
+        self.outputs = last
+        
         # Linear activation, using rnn inner loop last output
         self.predictions = tf.matmul(last, weights['out']) + biases['out']
         #self.predictions = tf.matmul(outputs, weights['out']) + biases['out']
@@ -171,7 +178,12 @@ class Estimator():
 
         # Optimizer Parameters from original paper
 #        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
-        self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
+        
+        self.optimizer = tf.train.AdamOptimizer()
+        #self.optimizer = tf.train.AdagradOptimizer(0.001)
+        #self.optimizer = tf.train.RMSPropOptimizer(0.001)
+        #self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
+#        self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
         self.train_op = self.optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 
         # Summaries for Tensorboard
@@ -182,7 +194,7 @@ class Estimator():
             tf.summary.scalar("max_q_value", tf.reduce_max(self.predictions))
         ])
 
-    def predict(self, sess, s):
+    def predict(self, sess, s,save_cell_states=False):
         """
         Predicts action values.
 
@@ -195,18 +207,31 @@ class Estimator():
           Tensor of shape [batch_size, NUM_VALID_ACTIONS] containing the estimated 
           action values.
         """
+        #print ('Calling predict')
+        #print (save_cell_states)
         #print (self.predictions)
 #        return sess.run(self.predictions, { self.X_pl: s })
-        pred,stat,curr_state = sess.run([self.predictions, self.states,self.current_st], { self.X_pl: s })
-        if len(self.all_states) == 0:
-            self.all_states = np.array(stat)
-        else:
-            self.all_states = np.vstack((self.all_states, np.array(stat)))
-        #Take the last step in the sequence of steps
-        if (len(self.all_steps) == 0):
-            self.all_steps = np.array(curr_state)
-        else:
-            self.all_steps = np.vstack((self.all_steps, np.array(curr_state)))
+        pred,cell_state,curr_state,outs,hid_state = sess.run([self.predictions, self.cell_states,self.current_st,self.outputs,self.hidden_states], { self.X_pl: s })
+        if (save_cell_states == True):
+            if len(self.all_states) == 0:
+                self.all_states = np.array(cell_state)
+            else:
+                self.all_states = np.vstack((self.all_states, np.array(cell_state)))
+                #Take the last step in the sequence of steps
+            if (len(self.all_steps) == 0):
+                self.all_steps = np.array(curr_state)
+            else:
+                self.all_steps = np.vstack((self.all_steps, np.array(curr_state)))
+            if (len(self.all_outputs) == 0):
+                self.all_outputs = np.array(outs)
+            else:
+                self.all_outputs = np.vstack((self.all_outputs, np.array(outs)))
+            if (len(self.all_hid_states) == 0):
+                self.all_hid_states = np.array(hid_state)
+            else:
+                self.all_hid_states = np.vstack((self.all_hid_states, np.array(hid_state)))    
+        #print (self.all_states)
+        #print (self.all_outputs)
         return (pred)
 
     def update(self, sess, s, a, y):
@@ -275,29 +300,40 @@ class Estimator():
             a = self.cartesian(x, x, x, x)
         if (numBlocks ==3):
             a = self.cartesian(x, x, x, x, x, x)
+        if (numBlocks ==4):
+            a = self.cartesian(x, x, x, x, x, x, x, x)
+        if (numBlocks ==5):
+            a = self.cartesian(x, x, x, x, x, x, x, x, x, x)
         for i in a:
             ret += self.state_to_string(i) + " " + str(self.state_to_integer(i)) + "\n"
         return ret
                         
     def save_states(self,folder):
         #stat = np.reshape(self.all_states, (-1, self.all_states.shape[2]))
+        lstm_vis_config
         os.makedirs(folder)
         f = h5py.File(folder + "/states.hdf5", "w")
-        print (len(self.all_states))
-        print (self.all_states[0])
+        #print ("Save states")
+        #print (len(self.all_states))
+        #print (self.all_states[0])
         f["states1"] = self.all_states
+        #print (len(self.all_outputs))
+        #print (self.all_outputs[0])
+        f["outputs"] = self.all_outputs
+        f["hidden1"] = self.all_hid_states
         f.close()
         #The contents of train.h5 must be a list of the input at the different steps
         f = h5py.File(folder + "/train.hdf5", "w")
         train = self.state_array_to_integer_array(self.all_steps)
-        print (train[0])
-        print (len(train))
+        #print (train[0])
+        #print (len(train))
         f["word_ids"] = train        
         f.close()
         data = self.generate_dictionary_file()
         out = open(folder + "/train.dict", "w")
         out.write(data)
         out.close()
+        copyfile(lstm_vis_config, folder+"/lstm.yml")
 
 # In[ ]:
 
@@ -413,11 +449,11 @@ def make_epsilon_greedy_policy(estimator, nA):
         the probabilities for each action in the form of a numpy array of length nA.
 
     """
-    def policy_fn(sess, observation, epsilon):
+    def policy_fn(sess, observation, epsilon,save_cell_states):
         A = np.ones(nA, dtype=float) * epsilon / nA
         #prev_states = computePreviousStates(replay_memory,n_steps,False)
 #        q_values = estimator.predict(sess, np.expand_dims(observation, 0))[0]
-        q_values = estimator.predict(sess, observation)[0]
+        q_values = estimator.predict(sess, observation,save_cell_states)[0]
         print ("\nQ_values")
         #print (q_values)       
         best_action = np.argmax(q_values)
@@ -546,7 +582,7 @@ def deep_q_learning(sess,
     for i in range(replay_memory_init_size):
         #New version follows the existing policy, only useful if the estimator has been pre-loaded
         prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
-        action_probs = policy(sess, prev_states_current, epsilons[min(total_t, epsilon_decay_steps-1)])
+        action_probs = policy(sess, prev_states_current, epsilons[min(total_t, epsilon_decay_steps-1)],True)
         action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
         #print ("\nTaking action " + str(VALID_ACTIONS[action]))        
         #Old version without following the policy
@@ -600,7 +636,7 @@ def deep_q_learning(sess,
             prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
 
             #action_probs = policy(sess, state, epsilon)
-            action_probs = policy(sess, prev_states_current, epsilon)
+            action_probs = policy(sess, prev_states_current, epsilon,True)
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
             print ("\nTaking action " + str(VALID_ACTIONS[action]))
             next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
@@ -631,7 +667,7 @@ def deep_q_learning(sess,
             prev_next_states_batch = np.reshape(prev_next_states_batch,(-1,n_steps,numBlocks*2))
             #print (prev_next_states_batch[0])
             #print (prev_next_states_batch.shape)
-            q_values_next = target_estimator.predict(sess, prev_next_states_batch)
+            q_values_next = target_estimator.predict(sess, prev_next_states_batch,False)
             targets_batch = reward_batch + np.invert(done_batch).astype(np.float32) * discount_factor * np.amax(q_values_next, axis=1)
 
             # Perform gradient descent update
@@ -642,6 +678,9 @@ def deep_q_learning(sess,
             if done:
                 print ('PROBLEM SOLVED')
                 print ('\n*******************************************\n')
+                #We just make this call because we want to store the last state of the episode
+                prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
+                action_probs = policy(sess, prev_states_current, epsilon,True)
                 break
             #if (loss>500):
             #    break
@@ -677,11 +716,11 @@ tf.reset_default_graph()
 # Where we save our checkpoints and graphs
 #experiment_dir = os.path.abspath("./experiments/{}".format(env.spec.id))
 # Check if one parameter was used as command line argument
-if (len(sys.argv)>1):
-    experiment_dir = sys.argv[1]
-else:
-    experiment_dir = os.path.abspath("./experiments/{}".format(filename))
-
+#if (len(sys.argv)>1):
+#    experiment_dir = sys.argv[1]
+#else:
+experiment_dir = os.path.abspath("./experiments/{}".format(filename))
+#experiment_dir = ("/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/experiments/BlocksWorld_170826_173039_c")
 
 # Create a glboal step variable
 global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -704,35 +743,32 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=200,
+                                    num_episodes=3000,
 #                                    replay_memory_size=500000,
                                     replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
                                     replay_memory_init_size=10000,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=100,
+                                    update_target_estimator_every=500,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=300,
+                                    epsilon_decay_steps=10000,
                                     discount_factor=0.99,
 #                                    batch_size=32):
-                                    batch_size=512):
+                                    batch_size=256):
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
 
-
-
+q_estimator.save_states(experiment_dir + "/lstmvis")
 
 ep_length,ep_reward,t_steps = plotting.plot_episode_stats (stats, smoothing_window=5,noshow=True)
 ep_length.savefig(experiment_dir + '/ep_length.png')
 ep_reward.savefig(experiment_dir + '/ep_reward.png')
 t_steps.savefig(experiment_dir + '/t_steps.png')
 
-
-q_estimator.save_states(experiment_dir + "/lstmvis")
-
-copyfile("./log.txt", experiment_dir + "/log.txt")
-os.remove("./log.txt")
+if (os.path.exists(".log.txt")):
+    copyfile("./log.txt", experiment_dir + "/log.txt")
+    os.remove("./log.txt")
     
 
 # In[ ]:
