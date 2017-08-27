@@ -43,7 +43,7 @@ import plotting
 numBlocks = 2
 
 #Number of steps to feed the LSTM
-n_steps = 32
+n_steps = 16
 
 #Defines the dimension of the input of the LSTM, we use current state and the goal state as the input
 #For example [0,1] [2,0] (initial state,goal state) has dimension 2*2
@@ -148,26 +148,38 @@ class Estimator():
 
         # Get lstm cell output
         # Creates an unrolled graph
-        # outputs
+        # outputs shape is batch_size x n_steps x n_hidden
+        # states[0] contains the cell states, shape is batch_size x n_hidden
+        # states[1] contains the hidden states shape is batch size x n_hidden
         outputs, states = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
-        print (outputs.shape)
-        print (states[0].shape)
-        print (states[1].shape)
+
+        #Store information for LSTMVis
         self.cell_states = states[0]
         self.hidden_states = states[1]
-        # We need to store the current state for LSTMVis
-        # 
+        #We need to store the input of the network to identify every time step in the
+        #LSTMVisualization
+        #tf.slice(input, begin,size,...)
+        #We take the first element of the batch only, predict will always be called with batch_size=1
+        #We take the last step
+        #We take the complete input of the network
+        #Then we store the value of the input of the network in the current state
         self.current_st = tf.reshape(tf.slice(self.X_pl,[0,n_steps-1,0],[1,1,n_input]),[-1,n_input])
 
+        #We just want the output of the last step
+        #perm or axis = [1,0,2]
+        #Shape before transpose is batch_size x n_steps x n_hidden
+        #Shape after transpose is n_steps x batch_size x n_hidden
         val = tf.transpose(outputs, [1, 0, 2])
+        #Then we take the last of the steps n_steps -1
         last = tf.gather(val, int(val.get_shape()[0]) - 1)
 
+        #Shape of last is (batch_size,n_hidden)
         self.outputs = last
         
         # Linear activation, using rnn inner loop last output
+        # Shape of self.predictions is batch_size x n_output
         self.predictions = tf.matmul(last, weights['out']) + biases['out']
-        #self.predictions = tf.matmul(outputs, weights['out']) + biases['out']
-        
+
         # Get the predictions for the chosen actions only
         gather_indices = tf.range(batch_size) * tf.shape(self.predictions)[1] + self.actions_pl
         self.action_predictions = tf.gather(tf.reshape(self.predictions, [-1]), gather_indices)
@@ -178,7 +190,6 @@ class Estimator():
 
         # Optimizer Parameters from original paper
 #        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
-        
         self.optimizer = tf.train.AdamOptimizer()
         #self.optimizer = tf.train.AdagradOptimizer(0.001)
         #self.optimizer = tf.train.RMSPropOptimizer(0.001)
@@ -743,17 +754,17 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=3000,
+                                    num_episodes=100,
 #                                    replay_memory_size=500000,
                                     replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
                                     replay_memory_init_size=10000,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=500,
+                                    update_target_estimator_every=200,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=10000,
+                                    epsilon_decay_steps=200,
                                     discount_factor=0.99,
 #                                    batch_size=32):
                                     batch_size=256):
@@ -766,7 +777,7 @@ ep_length.savefig(experiment_dir + '/ep_length.png')
 ep_reward.savefig(experiment_dir + '/ep_reward.png')
 t_steps.savefig(experiment_dir + '/t_steps.png')
 
-if (os.path.exists(".log.txt")):
+if (os.path.exists("./log.txt")):
     copyfile("./log.txt", experiment_dir + "/log.txt")
     os.remove("./log.txt")
     
