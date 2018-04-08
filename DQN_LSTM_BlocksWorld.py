@@ -43,7 +43,7 @@ import plotting
 numBlocks = 2
 
 #Number of steps to feed the LSTM
-n_steps = 16
+n_steps = 8
 
 #Defines the dimension of the input of the LSTM, we use current state and the goal state as the input
 #For example [0,1] [2,0] (initial state,goal state) has dimension 2*2
@@ -149,13 +149,16 @@ class Estimator():
         # Get lstm cell output
         # Creates an unrolled graph
         # outputs shape is batch_size x n_steps x n_hidden
-        # states[0] contains the cell states, shape is batch_size x n_hidden
-        # states[1] contains the hidden states shape is batch size x n_hidden
-        outputs, states = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
-
+        # states_tuple[0] contains the cell states, shape is batch_size x n_hidden
+        # states_tuple[1] contains the hidden states shape is batch size x n_hidden
+        outputs, states_tuple = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
+        print (outputs.shape)       
         #Store information for LSTMVis
-        self.cell_states = states[0]
-        self.hidden_states = states[1]
+        self.cell_states = states_tuple[0] #(c) (hidden state)
+        self.hidden_states = states_tuple[0] #(c) (hidden state)
+#        self.cell_states = states_tuple[1] #(h) output
+        #print (self.hidden_states.shape)
+        print (self.cell_states.shape)
         #We need to store the input of the network to identify every time step in the
         #LSTMVisualization
         #tf.slice(input, begin,size,...)
@@ -181,7 +184,13 @@ class Estimator():
         self.predictions = tf.matmul(last, weights['out']) + biases['out']
 
         # Get the predictions for the chosen actions only
+        #tf.range returns a 1-D tensor starting at 0 and ending in batch_size
+        #If n_outputs is 6 for example, we get a 1-D tensor like 0,6,12,18, ...
+        #If self.actions_pl = 4 for the first item in the batch and 3 for the second 
+        #We get something like 0+4 6+3 ... in gather_indices
         gather_indices = tf.range(batch_size) * tf.shape(self.predictions)[1] + self.actions_pl
+
+        #tf.gather will slice only the predictions for the actions according to gather_indices        
         self.action_predictions = tf.gather(tf.reshape(self.predictions, [-1]), gather_indices)
 
         # Calcualte the loss
@@ -190,6 +199,7 @@ class Estimator():
 
         # Optimizer Parameters from original paper
 #        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+#        self.optimizer = tf.train.RMSPropOptimizer(0.00001, 0.99, 0.0, 1e-6)
         self.optimizer = tf.train.AdamOptimizer()
         #self.optimizer = tf.train.AdagradOptimizer(0.001)
         #self.optimizer = tf.train.RMSPropOptimizer(0.001)
@@ -202,7 +212,9 @@ class Estimator():
             tf.summary.scalar("loss", self.loss),
             tf.summary.histogram("loss_hist", self.losses),
             tf.summary.histogram("q_values_hist", self.predictions),
-            tf.summary.scalar("max_q_value", tf.reduce_max(self.predictions))
+            tf.summary.scalar("max_q_value", tf.reduce_max(self.predictions)),
+            tf.summary.histogram("out_weights", weights['out']),
+            tf.summary.histogram("out_biases", biases['out'])
         ])
 
     def predict(self, sess, s,save_cell_states=False):
@@ -327,10 +339,11 @@ class Estimator():
         #print ("Save states")
         #print (len(self.all_states))
         #print (self.all_states[0])
-        f["states1"] = self.all_states
+#        f["states1"] = self.all_states
         #print (len(self.all_outputs))
         #print (self.all_outputs[0])
         f["outputs"] = self.all_outputs
+#        f["hidden1"] = self.all_hid_states
         f["hidden1"] = self.all_hid_states
         f.close()
         #The contents of train.h5 must be a list of the input at the different steps
@@ -428,11 +441,11 @@ def computePreviousStates(replay_memory,seq_length):
         n = seq_length    
     else:    
         n = len(replay_memory)    
-#    while (n > 0 and (replay_memory[-n].done == False)):
+        #while (n > 0 and (replay_memory[-n].done == False)):
     while (n > 0):
-    #        if (computeNextStates == True):
+        #if (computeNextStates == True):
         prev_states_next.append(replay_memory[-n].next_state)
-#        else:
+        #else:
         prev_states_current.append(replay_memory[-n].state)
         n = n - 1
     while (len(prev_states_next)<n_steps):
@@ -440,8 +453,6 @@ def computePreviousStates(replay_memory,seq_length):
         prev_states_current.insert(0,np.zeros(numBlocks*2))
     prev_states_next = np.array(prev_states_next)
     prev_states_current = np.array(prev_states_current)
-    #print (prev_states.shape)
-#    print ("prev_states shape " + str(prev_states.shape))
 
     prev_states_current = np.reshape(prev_states_current,(-1,n_steps,n_input))
     prev_states_next = np.reshape(prev_states_next,(-1,n_steps,n_input))
@@ -583,6 +594,15 @@ def deep_q_learning(sess,
         q_estimator,
         len(VALID_ACTIONS))
 
+    # The following code will show all the trainable variables
+    #variables_names = [v.name for v in tf.trainable_variables()]
+    #values = sess.run(variables_names)
+    #for k, v in zip(variables_names, values):
+    #    print ("Variable: ", k)
+    #    print ("Shape: ", v.shape)
+    #    print (v)
+    #input ('Press any key')
+    
     # Populate the replay memory with initial experience
     print("Populating replay memory...")
     state = env.reset()
@@ -590,6 +610,7 @@ def deep_q_learning(sess,
 #    print (state.shape)
 #    print (state)
 #    state = np.stack([state] * 4, axis=2)    
+    t= 0
     for i in range(replay_memory_init_size):
         #New version follows the existing policy, only useful if the estimator has been pre-loaded
         prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
@@ -601,15 +622,30 @@ def deep_q_learning(sess,
         next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
         next_state = state_processor.process(sess, next_state)
         #next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
-        prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)
-        replay_memory.append(Transition(state, action, reward, next_state, done,prev_states_next))
+        prev_states_current,prev_states_next = computePreviousStates(replay_memory,n_steps)      
+        # Incorrect code, delete
+        #if (t!=0):
+        #    print ('Inside loop t not zero')
+        #    print (state)
+        #    state[numBlocks:]=numBlocks+1
+        #    print (state)
+        # Move the following line inside the if
+        #replay_memory.append(Transition(state, action, reward, next_state, done,prev_states_next))
+        # Trick to consider the case where we end the episode, the next state will change
+        # because we reset the environment
+        orig_state = state
         if done:
+            t=0
             state = env.reset()
             state = state_processor.process(sess, state)
+            # Note that we use state as the next_state because we have reset the environment
+            replay_memory.append(Transition(orig_state, action, reward, state, done,prev_states_next))
             #state = np.stack([state] * 4, axis=2)
-        else:
-            state = next_state
 
+        else:
+            replay_memory.append(Transition(state, action, reward, next_state, done,prev_states_next))
+            state = next_state
+            t=t+1
 
     # Record videos
     # Add env Monitor wrapper
@@ -660,7 +696,8 @@ def deep_q_learning(sess,
                 replay_memory.pop(0)
 
             # Save transition to replay memory
-            #prev_states_next = computePreviousStates(replay_memory,n_steps,computeNextStates=True)
+            # Here we should consider that when the episode is done next_state should be replaced
+            # by the first state in the next episode?
             replay_memory.append(Transition(state, action, reward, next_state, done,prev_states_next))
             #replay_memory.append(Transition(state, action, reward, next_state, done))
 
@@ -671,13 +708,16 @@ def deep_q_learning(sess,
             # Sample a minibatch from the replay memory
             samples = random.sample(replay_memory, batch_size)
             states_batch, action_batch, reward_batch, next_states_batch, done_batch,prev_next_states_batch = map(np.array, zip(*samples))
-
+            # Shape of next_states_batch is batch_size*n_input
+            print (next_states_batch.shape)
+            print (prev_next_states_batch.shape)
             # Calculate q values and targets
 #            q_values_next = target_estimator.predict(sess, next_states_batch)
             #print (prev_next_states_batch[0])
+            # Shape of prev_next_states_batch is batch_size*n_steps*n_output
             prev_next_states_batch = np.reshape(prev_next_states_batch,(-1,n_steps,numBlocks*2))
-            #print (prev_next_states_batch[0])
-            #print (prev_next_states_batch.shape)
+            print (prev_next_states_batch[0])
+            print (prev_next_states_batch.shape)
             q_values_next = target_estimator.predict(sess, prev_next_states_batch,False)
             targets_batch = reward_batch + np.invert(done_batch).astype(np.float32) * discount_factor * np.amax(q_values_next, axis=1)
 
@@ -754,20 +794,20 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=100,
+                                    num_episodes=500,
 #                                    replay_memory_size=500000,
                                     replay_memory_size=50000,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=10000,
+                                    replay_memory_init_size=5000,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=200,
+                                    update_target_estimator_every=600,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=200,
+                                    epsilon_decay_steps=2500,
                                     discount_factor=0.99,
 #                                    batch_size=32):
-                                    batch_size=256):
+                                    batch_size=32):
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
 
 q_estimator.save_states(experiment_dir + "/lstmvis")

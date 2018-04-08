@@ -39,5 +39,6 @@ while (n<num_episodes):
 print ("Average episode length " + str(sum(ep_lengths) / float(len(ep_lengths))))
     #input("Press Enter to continue...")
 
+#Average episode length with nBlocks=2 18,893
 #env.reset()
 #env.render()

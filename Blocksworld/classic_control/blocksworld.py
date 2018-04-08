@@ -25,9 +25,9 @@ class BlocksWorldEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}
     
     def __init__(self):
-        numBlocks = 3
-        #self.bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
-        self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        numBlocks = 2
+        self.bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        #self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
 
         self.numBlocks = numBlocks
         #The tuple consists on: Block to move, Destination to be moved

@@ -29,13 +29,44 @@ from gym.envs.classic_control.blocksworld import BlocksWorldEnv
 - Edit the file blocksworld.py and configure the path to the binary file 'bwstates' 
 
 
-##
-
-
-How to visualize the tensorflow learning
+### Visualize tensorflow learning
 tensorboard --logdir=./BlocksWorld-v0/
 http://localhost:6006
 
 
-List of files
+### About cell states, hidden states and outputs
+The naming conventions are quite confusing in the LSTM implementations I found.
+
+As per tensorflow reference of the BasicLSTMCell
+https://www.tensorflow.org/api_docs/python/tf/contrib/rnn/BasicLSTMCell
+
+I've followed the conventions in 
+http://arxiv.org/abs/1409.2329
+
+Basically:
+- The cell state is the same as the hidden state (named c)
+- The outputs are named with h
+
+
+### How to use the LSTMVis module
+
+See https://github.com/HendrikStrobelt/LSTMVis
+
+Once the file DQN_LSTM_BlocksWorld.py has completed all the episodes, a folder called /lstmvis will be created inside the 
+experiment folder.
+
+This folder contains the files
+- lstm.yml
+- states.hdf5
+- train.dict
+- train.hdf5
+
+
+### Guide to the files in this repository
+
+DQN_LSTM_BlocksWorld.py
+blocksworld.py
+
+
+
 
