@@ -20,6 +20,10 @@ import copy
 # Before using configure the __init__ function, 
 # Configure the variables 'numBlocks' and 'self.bwstates_path'
 
+#The following rewards are considered
+#0 when the agent reaches the goal state
+#-1 for a valid state
+#-10 for reaching a non-valid state (due to the way we code the states some of the combinations are not valid combinations)
 
 class BlocksWorldEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}

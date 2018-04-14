@@ -64,9 +64,10 @@ This folder contains the files
 
 ### Guide to the files in this repository
 
-DQN_LSTM_BlocksWorld.py
-blocksworld.py
-
+- blocksworld.py : Implementation of the BlocksWorld environment based on OpenAI Gym.
+- DQN_BlocksWorld.ipynb : Implementation of  DQN solving the BlocksWorld environment (toy problem with 2 blocks).
+- DQN_LSTM_BlocksWorld.py : Implementation of DQN using LSTM.
+- TODO
 
 
 
