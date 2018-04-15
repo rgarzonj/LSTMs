@@ -21,7 +21,7 @@ import h5py
 from collections import namedtuple
 
 # Build the name of the folder where we'll store the results
-basename = "BlocksWorld"
+basename = "DQN_LSTM_BlocksWorld"
 suffix = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
 filename = "_".join([basename, suffix]) # e.g. 'BlocksWorld_120508_171442'
 
@@ -50,7 +50,7 @@ n_steps = 8
 n_input = numBlocks*2
 
 #Number of hidden units in the lstm
-n_hidden = 256
+n_hidden = 64
 
 #Dimensions of the output: [block to be moved][destination of the block]
 #block to be moved has numBlocks length, and destination of the block has 
@@ -115,6 +115,7 @@ class Estimator():
         self.all_states = []        
         self.all_outputs = []
         self.all_hid_states = []
+        self.all_predictions = []
     
     def add_sessionGraph(self,sess):
         """
@@ -152,13 +153,13 @@ class Estimator():
         # states_tuple[0] contains the cell states, shape is batch_size x n_hidden
         # states_tuple[1] contains the hidden states shape is batch size x n_hidden
         outputs, states_tuple = tf.nn.dynamic_rnn(lstm_cell, self.X_pl, dtype=tf.float32)
-        print (outputs.shape)       
+        #print (outputs.shape)       
         #Store information for LSTMVis
         self.cell_states = states_tuple[0] #(c) (hidden state)
         self.hidden_states = states_tuple[0] #(c) (hidden state)
 #        self.cell_states = states_tuple[1] #(h) output
         #print (self.hidden_states.shape)
-        print (self.cell_states.shape)
+        #print (self.cell_states.shape)
         #We need to store the input of the network to identify every time step in the
         #LSTMVisualization
         #tf.slice(input, begin,size,...)
@@ -182,7 +183,7 @@ class Estimator():
         # Linear activation, using rnn inner loop last output
         # Shape of self.predictions is batch_size x n_output
         self.predictions = tf.matmul(last, weights['out']) + biases['out']
-
+        print (self.predictions.shape)
         # Get the predictions for the chosen actions only
         #tf.range returns a 1-D tensor starting at 0 and ending in batch_size
         #If n_outputs is 6 for example, we get a 1-D tensor like 0,6,12,18, ...
@@ -198,9 +199,9 @@ class Estimator():
         self.loss = tf.reduce_mean(self.losses)
 
         # Optimizer Parameters from original paper
-#        self.optimizer = tf.train.RMSPropOptimizer(0.00025, 0.99, 0.0, 1e-6)
+        #self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
 #        self.optimizer = tf.train.RMSPropOptimizer(0.00001, 0.99, 0.0, 1e-6)
-        self.optimizer = tf.train.AdamOptimizer()
+        self.optimizer = tf.train.AdamOptimizer(0.005)
         #self.optimizer = tf.train.AdagradOptimizer(0.001)
         #self.optimizer = tf.train.RMSPropOptimizer(0.001)
         #self.optimizer = tf.train.RMSPropOptimizer(0.0025, 0.99, 0.0, 1e-6)
@@ -253,6 +254,11 @@ class Estimator():
                 self.all_hid_states = np.array(hid_state)
             else:
                 self.all_hid_states = np.vstack((self.all_hid_states, np.array(hid_state)))    
+            if (len(self.all_predictions) == 0):
+                self.all_predictions = np.array(pred)
+            else:
+                self.all_predictions = np.vstack((self.all_predictions, np.array(pred)))
+            
         #print (self.all_states)
         #print (self.all_outputs)
         return (pred)
@@ -345,6 +351,7 @@ class Estimator():
         f["outputs"] = self.all_outputs
 #        f["hidden1"] = self.all_hid_states
         f["hidden1"] = self.all_hid_states
+        f["predictions"] = self.all_predictions
         f.close()
         #The contents of train.h5 must be a list of the input at the different steps
         f = h5py.File(folder + "/train.hdf5", "w")
@@ -476,11 +483,11 @@ def make_epsilon_greedy_policy(estimator, nA):
         #prev_states = computePreviousStates(replay_memory,n_steps,False)
 #        q_values = estimator.predict(sess, np.expand_dims(observation, 0))[0]
         q_values = estimator.predict(sess, observation,save_cell_states)[0]
-        print ("\nQ_values")
-        #print (q_values)       
+        print ("\nQ values")
+        print (q_values)       
         best_action = np.argmax(q_values)
         A[best_action] += (1.0 - epsilon)
-        print (A)
+        #print (A)
         return A
     return policy_fn
 
@@ -687,7 +694,7 @@ def deep_q_learning(sess,
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
             print ("\nTaking action " + str(VALID_ACTIONS[action]))
             next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
-            env.render()
+            #env.render()
             next_state = state_processor.process(sess, next_state)
 #            next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
 
@@ -709,18 +716,23 @@ def deep_q_learning(sess,
             samples = random.sample(replay_memory, batch_size)
             states_batch, action_batch, reward_batch, next_states_batch, done_batch,prev_next_states_batch = map(np.array, zip(*samples))
             # Shape of next_states_batch is batch_size*n_input
-            print (next_states_batch.shape)
-            print (prev_next_states_batch.shape)
+            #print (next_states_batch.shape)
+            #print (prev_next_states_batch.shape)
             # Calculate q values and targets
 #            q_values_next = target_estimator.predict(sess, next_states_batch)
             #print (prev_next_states_batch[0])
             # Shape of prev_next_states_batch is batch_size*n_steps*n_output
             prev_next_states_batch = np.reshape(prev_next_states_batch,(-1,n_steps,numBlocks*2))
-            print (prev_next_states_batch[0])
-            print (prev_next_states_batch.shape)
+            #print (prev_next_states_batch[0])
+            #print (prev_next_states_batch.shape)
             q_values_next = target_estimator.predict(sess, prev_next_states_batch,False)
+            #print ('Q values next')
+            #print (q_values_next.shape)
+            #print (q_values_next)
             targets_batch = reward_batch + np.invert(done_batch).astype(np.float32) * discount_factor * np.amax(q_values_next, axis=1)
-
+            #print ('Targets')
+            #print (targets_batch.shape)            
+            #print (targets_batch)           
             # Perform gradient descent update
             #states_batch = np.array(states_batch) 
             states_batch = np.array(prev_next_states_batch)
@@ -794,17 +806,17 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
 #                                    num_episodes=10000,
-                                    num_episodes=500,
+                                    num_episodes=300,
 #                                    replay_memory_size=500000,
-                                    replay_memory_size=50000,
+                                    replay_memory_size=1024,
 #                                    replay_memory_init_size=50000,
-                                    replay_memory_init_size=5000,
+                                    replay_memory_init_size=128,
 #                                    update_target_estimator_every=10000,
-                                    update_target_estimator_every=600,
+                                    update_target_estimator_every=500,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
 #                                    epsilon_decay_steps=500000,
-                                    epsilon_decay_steps=2500,
+                                    epsilon_decay_steps=800,
                                     discount_factor=0.99,
 #                                    batch_size=32):
                                     batch_size=32):
