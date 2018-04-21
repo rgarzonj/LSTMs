@@ -152,7 +152,7 @@ class Estimator():
 
         # Fully connected layers
         #flattened = tf.contrib.layers.flatten(conv3)
-        fc1 = tf.contrib.layers.fully_connected(self.X_pl, 64)
+        fc1 = tf.contrib.layers.fully_connected(self.X_pl, 4096)
         last = tf.contrib.layers.fully_connected(fc1, len(VALID_ACTIONS))
         
         # We need the network to output negative numbers (Rewards are negative or zero, so we add another final linear layer)
@@ -496,21 +496,21 @@ def deep_q_learning(sess,
             #print ('Targets batch')
             #print (targets_batch)
             loss,max_q_values = q_estimator.update(sess, states_batch, action_batch, targets_batch)
-            n = 0
-            for q in max_q_values: 
+#            n = 0
+#            for q in max_q_values: 
                 #print (states_batch[n])
                 #print (q)
-                s_str = np.array2string(states_batch[n])
-                add_q_value(s_str,q)
+#                s_str = np.array2string(states_batch[n])
+#                add_q_value(s_str,q)
                 #Ideally we compute the average of max q values of the last steps in order
                 #to have a less noisy metric of the convergence of the algorithm
-                if len(q_value_dict[s_str])>32:
-                    val = np.mean(q_value_dict[s_str][-32:])
-                else:
-                    val = np.mean(q_value_dict[s_str])
+#                if len(q_value_dict[s_str])>32:
+#                    val = np.mean(q_value_dict[s_str][-32:])
+#                else:
+#                    val = np.mean(q_value_dict[s_str])
                 #qvalue_summary.value.add(simple_value=val,tag="avg_max_q_value " + s_str)
-                n = n+1
-            if done:
+#                n = n+1
+            if done:                 
                 break
 
             state = next_state
@@ -562,12 +562,12 @@ with tf.Session() as sess:
                                     state_processor=state_processor,
                                     experiment_dir=experiment_dir,
                                     num_episodes=400,
-                                    replay_memory_size=70000,
-                                    replay_memory_init_size=10000,
-                                    update_target_estimator_every=4000,
+                                    replay_memory_size=800000,
+                                    replay_memory_init_size=400000,
+                                    update_target_estimator_every=2000,
                                     epsilon_start=1.0,
                                     epsilon_end=0.1,
-                                    epsilon_decay_steps=50000,
+                                    epsilon_decay_steps=1000000,
                                     discount_factor=0.99,
                                     batch_size=32):
 
