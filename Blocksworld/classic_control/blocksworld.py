@@ -29,7 +29,7 @@ class BlocksWorldEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}
     
     def __init__(self):
-        numBlocks = 2
+        numBlocks = 3
         self.bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
         #self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
 
@@ -123,18 +123,21 @@ class BlocksWorldEnv(gym.Env):
         if ((self.state[block_to_move]==destination) or ((block_to_move+1 == destination) and (destination !=0))):
             #print ('\nNothing to do')
             #Unuseful move, same position as we have now or we try to move blockX on top of blockX
-            reward = -10
+            #reward = -10
+            reward = -1
         else:
             if (block_to_move+1 in self.state):
                 #If block_to_move has some block on top, reward = -2 do nothing
                 #Impossible move
                 #print ('\nBlock ' + str(block_to_move+1) + ' to move is not clear')
-                reward = -10
+                #reward = -10
+                reward = -1
             else:
                 if ((destination in self.state) and (destination != 0)):
                     #If destination has some block on top and destination is not the table, reward = -1 do nothing
                     #print ('Destination block' + str(destination) + ' is not clear')
-                    reward = -10
+                    #reward = -10
+                    reward = -1
                 else:
                     self.state [block_to_move] = destination
                     if (destination == 0):
@@ -144,10 +147,12 @@ class BlocksWorldEnv(gym.Env):
                     #print ('\nMoving block' + str (block_to_move+1) + dest)
                     if (str(self.state)==str(self.goal)):
                         print ('\n*************** PROBLEM SOLVED!!!!!!!!!!!! **********')
-                        reward = 0
+                        #reward = 0
+                        reward = 1
                         Done = True
                     else:
-                        reward = -1
+                        reward = 0
+                        #reward = -1
         self.last_reward = reward
         self.episode_total_reward += reward
         return self._get_obs(), reward, Done, {}
