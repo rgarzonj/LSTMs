@@ -30,7 +30,7 @@ class BlocksWorldEnv(gym.Env):
     
     def __init__(self):
         numBlocks = 3
-        self.bwstates_path = '/Users/rubengarzon/Documents/Projects/phD/Repo/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        self.bwstates_path = '/Users/rgarzon/Documents/Projects/Rubén/phD/Repository/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
         #self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
 
         self.numBlocks = numBlocks
@@ -41,7 +41,9 @@ class BlocksWorldEnv(gym.Env):
         self.observation_space = Tuple(
             [Discrete(numBlocks), Discrete(numBlocks),Discrete(numBlocks)])
         self.episode_total_reward = None
-        self.numactions = (numBlocks+1)*numBlocks
+        self.numactions = (numBlocks+1)*(numBlocks+1)
+#        self.numactions = (numBlocks+1)*numBlocks
+
 
         self._seed()
     
@@ -120,13 +122,15 @@ class BlocksWorldEnv(gym.Env):
         #print (destination)
         #print (block_to_move)        
         #print (self.state)
-        if ((self.state[block_to_move]==destination) or ((block_to_move+1 == destination) and (destination !=0))):
+        if ((self.state[block_to_move-1]==destination) or ((block_to_move == destination) and (destination !=0))):
+#        if ((self.state[block_to_move]==destination) or ((block_to_move+1 == destination) and (destination !=0))):
             #print ('\nNothing to do')
             #Unuseful move, same position as we have now or we try to move blockX on top of blockX
             #reward = -10
             reward = -1
         else:
-            if (block_to_move+1 in self.state):
+#            if (block_to_move in self.state):
+            if ((block_to_move in self.state) or (block_to_move==0)):
                 #If block_to_move has some block on top, reward = -2 do nothing
                 #Impossible move
                 #print ('\nBlock ' + str(block_to_move+1) + ' to move is not clear')
@@ -139,7 +143,8 @@ class BlocksWorldEnv(gym.Env):
                     #reward = -10
                     reward = -1
                 else:
-                    self.state [block_to_move] = destination
+                    #self.state [block_to_move] = destination
+                    self.state [block_to_move-1] = destination
                     if (destination == 0):
                         dest = " to the table"
                     else:
