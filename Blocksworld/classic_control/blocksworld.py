@@ -29,14 +29,14 @@ class BlocksWorldEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}
     
     def __init__(self):
-        numBlocks = 3
-        self.bwstates_path = '/Users/rgarzon/Documents/Projects/Rubén/phD/Repository/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
+        numBlocks = 4
+        self.bwstates_path = '/Users/rgarzon/Documents/Projects/Ruben/phD/Repository/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
         #self.bwstates_path = '/home/usuaris/rgarzonj/github/LSTMs/Blocksworld/GENERATOR/bwstates.1/bwstates'
 
         self.numBlocks = numBlocks
         #The tuple consists on: Block to move, Destination to be moved
         self.action_space = Tuple(
-            [Discrete(numBlocks-1), Discrete(numBlocks)])
+            [Discrete(numBlocks), Discrete(numBlocks)])
 
         self.observation_space = Tuple(
             [Discrete(numBlocks), Discrete(numBlocks),Discrete(numBlocks)])
@@ -155,9 +155,10 @@ class BlocksWorldEnv(gym.Env):
                         #reward = 0
                         reward = 1
                         Done = True
-                    else:
-                        reward = 0
-                        #reward = -1
+                    else:                 
+                        #If we use 0, the Q-learning algorithm is not learning correctly
+                        #reward = 0
+                        reward = -1
         self.last_reward = reward
         self.episode_total_reward += reward
         return self._get_obs(), reward, Done, {}
